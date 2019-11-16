@@ -1,1 +1,1 @@
-web: bin/gatelord
+web: gatelord

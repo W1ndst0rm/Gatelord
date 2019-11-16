@@ -42,12 +42,19 @@ func main() {
 		log.Fatal("CLIENT_SECRET must be set")
 	}
 
+	//CORS allowed origins, comma-separated list of origins
+	corsOrigins := os.Getenv("CORS_ORIGINS")
+	if corsOrigins == "" {
+		corsOrigins = "*"
+	}
+	AllowedOrigins := strings.Split(corsOrigins, ",")
+
 	//create router
 	r := gin.Default()
 	//Setup CORS
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:        false,
-		AllowOrigins:           []string{"https://dev.jville.family"},
+		AllowOrigins:           AllowedOrigins,
 		AllowMethods:           []string{"OPTIONS", "GET", "POST", "HEAD"},
 		AllowHeaders:           []string{"Origin", "Accept", "Content-Type"},
 		AllowCredentials:       false,
@@ -55,14 +62,14 @@ func main() {
 		MaxAge:                 60,
 		AllowBrowserExtensions: false,
 	}))
-	
+
 	//Handle base route
-	r.GET("/", func(c *gin.Context){
+	r.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Authentication Proxy for the bungie.net api")
 	})
 	//Proxy authentication request to the Bungie api
 	//Adds client secret not available in JS frontend
-	r.POST("/authenticate", func(c *gin.Context){
+	r.POST("/authenticate", func(c *gin.Context) {
 		var authBody AuthBody
 
 		//parse the received body into struct
@@ -87,32 +94,27 @@ func main() {
 		r.Header.Set("X-API-KEY", "")
 
 		//execute the request
-		client:= &http.Client{}
+		client := &http.Client{}
 		resp, err := client.Do(r)
 		if err != nil {
 			log.Fatal("Error fetching data from bungie.net API: ", err)
 		}
-		log.Println(resp.StatusCode)
 
 		//handle the response
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatal("Invalid response body received from bungie.net API: ", err)
+		if resp != nil {
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				log.Fatal("Invalid response body received from bungie.net API: ", err)
+			}
+			c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
 		}
-		c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
+
 	})
 	log.Fatal(r.Run(":" + port))
 }
 
 type AuthBody struct {
 	GrantType string `json:"grantType" form:"grant_type" binding:"required"`
-	Code string `json:"code" form:"code" binding:"required"`
-}
-
-type BungieAuthResponse struct {
-	Error string `json:"error"`
-	ErrorDescription string `json:"error_description"`
-	AccessToken string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	Code      string `json:"code" form:"code" binding:"required"`
 }
